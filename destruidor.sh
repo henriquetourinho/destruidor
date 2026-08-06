@@ -1,107 +1,62 @@
 #!/bin/bash
 
 # /*********************************************************************************
-# * Projeto:   Destruidor
+# * Projeto:   Destruidor (Revisão de Segurança Forense)
 # * Autor:     Carlos Henrique Tourinho Santana
-# * Versão:    1.0
-# * Data:      13 de junho de 2025
 # *
 # * Descrição:
-# * Este script realiza a destruição total, automática e irreversível de todo o sistema
-# * Linux onde for executado, apagando arquivos essenciais, desmontando partições,
-# * removendo proteções de arquivos, sobrescrevendo dispositivos físicos e eliminando
-# * todos os dados, inclusive em dispositivos externos conectados.
-# *
-# * Avisos Importantes:
-# * - NÃO execute este script em sistemas de produção, pessoais, ou que contenham dados importantes.
-# * - A execução é imediata e sem confirmações após o aviso inicial.
-# * - Nenhum dado será recuperável após sua execução.
-# * - O script tenta desmontar partições para apagar diretamente os dispositivos físicos.
-# * - O sistema será reiniciado automaticamente ao final para aplicar a destruição completa.
-# *
-# * Riscos:
-# * - Este script é letal para o sistema e pode causar perda irreversível de dados.
-# * - Use apenas em ambientes isolados e para fins específicos de destruição.
-# *
-# * Uso:
-# * - Executar diretamente com privilégios de root.
-# * - Exemplo: sudo ./destruidor.sh
-# *
-# * ATENÇÃO: NÃO ME RESPONSABILIZO POR QUALQUER DANO CAUSADO PELO USO DESTE SCRIPT.
+# * Ferramenta de eliminação emergencial focada na destruição de cabeçalhos
+# * criptográficos (LUKS), limpeza de RAM e sobrescrita de arquivos vitais.
 # *********************************************************************************/
 
+echo "[!] INICIANDO PROTOCOLO DE DESTRUIÇÃO DE EMERGÊNCIA"
 
-echo "AVISO FATAL: ESTE SCRIPT ESTÁ PRESTES A INICIAR A DESTRUIÇÃO IRREVERSÍVEL DO SISTEMA."
-echo "NÃO HÁ MAIS INTERAÇÕES OU PEDIDOS DE CONFIRMAÇÃO."
-echo "VOCÊ TEM 1 SEGUNDOS PARA PARAR (CTRL+C) ANTES QUE O PROCESSO DESTRUTIVO COMECE."
-sleep 1 # Última chance para o usuário cancelar.
+# 1. Eliminação Direcionada de Arquivos Críticos (shred)
+# Alvo: Chaves SSH, GPG, tokens de sessão e bancos de dados SQLite locais.
+# O 'shred -uz -n 2' sobrescreve o arquivo 2 vezes com dados aleatórios, depois com zeros, e o remove.
+echo "Sobrescrevendo chaves criptográficas e identidades..."
+find /home /root -name ".ssh" -type d -exec shred -uz -n 2 {}/* 2>/dev/null \;
+find /home /root -name ".gnupg" -type d -exec shred -uz -n 2 {}/* 2>/dev/null \;
+find /var/lib -name "*.db" -type f -exec shred -uz -n 2 {} 2>/dev/null \;
 
-# Desmontar e remountar partições com permissões de escrita (RW)
-# Isso tenta garantir que o script tenha o máximo de privilégios para apagar tudo.
-echo "Preparando o ambiente: Remontando e desmontando partições para forçar acesso de escrita..."
-find / -maxdepth 1 -type d -exec mount -o remount,rw {} \; 2>/dev/null # Tenta remount no root e subdiretórios
-mount -o remount,rw / 2>/dev/null
-mount -o remount,rw /boot 2>/dev/null
+# 2. Destruição Criptográfica (Crypto-Shredding) - O PASSO MAIS IMPORTANTE
+# Localiza todas as partições LUKS (criptografadas) e destrói irreversivelmente os cabeçalhos (keyslots).
+# Isso transforma todo o disco em dados ilegíveis quase instantaneamente.
+echo "Inutilizando volumes criptografados..."
+for luks_dev in $(blkid | grep crypto_LUKS | awk -F ':' '{print $1}'); do
+    # O comando luksErase remove todas as chaves de descriptografia.
+    # Sem backup do cabeçalho, os dados são perdidos para sempre.
+    cryptsetup luksErase -q "$luks_dev" 2>/dev/null &
+done
 
-# Tenta desmontar partições não essenciais para garantir que o 'rm -rf' possa agir diretamente no dispositivo
-# Isso é crucial para "pegar" dispositivos externos ou partições separadas.
-# Pode falhar se houver processos utilizando o ponto de montagem.
-echo "Tentando desmontar partições não essenciais para um acesso mais direto aos dispositivos..."
-for mount_point in $(grep " / " /proc/mounts | awk '{print $2}'); do # Desmonta apenas os que estão em /
-    if [ "$mount_point" != "/" ]; then
-        umount -l "$mount_point" 2>/dev/null # -l: lazy unmount (desmonta quando o sistema permitir)
+# 3. Corrupção da Tabela de Partições (MBR/GPT) e Bootloader
+# Torna o sistema não inicializável sobrescrevendo os primeiros e últimos megabytes dos discos físicos.
+echo "Destruindo tabelas de partição e boot..."
+for disk in $(lsblk -ndpo NAME,TYPE | awk '$2=="disk" {print $1}'); do
+    # Sobrescreve os primeiros 10MB (MBR, GPT primária, partes do bootloader)
+    dd if=/dev/urandom of="$disk" bs=1M count=10 status=none conv=notrunc 2>/dev/null &
+    
+    # Busca o tamanho do disco e sobrescreve o final (onde fica o backup do GPT)
+    size=$(blockdev --getsz "$disk" 2>/dev/null)
+    if [ -n "$size" ]; then
+        seek_point=$((size - 20480)) # Volta 10MB do final
+        dd if=/dev/urandom of="$disk" bs=512 seek="$seek_point" count=20480 status=none 2>/dev/null &
     fi
 done
 
-# Remove atributos de imutabilidade (proteção contra deleção)
-echo "Removendo atributos de imutabilidade de arquivos críticos..."
-chattr -i -R /bin /sbin /etc /var /lib /lib64 /usr /boot /opt /root /home 2>/dev/null
+# Aguarda 2 segundos para garantir que os processos em background (dd e cryptsetup) enviem os comandos ao disco.
+sleep 2
 
-# === ETAPA DE DESTRUIÇÃO DE DADOS EM TODOS OS DISPOSITIVOS ===
-# Esta é a parte mais "inteligente" e perigosa.
-# Identifica todos os dispositivos de bloco (HDs, SSDs, USBs) e tenta sobrescrevê-los.
-echo "Iniciando a SOBRESCRITA IRREVERSÍVEL de DADOS em TODOS os dispositivos detectados..."
-# O comando 'lsblk -npo NAME,TYPE,MOUNTPOINT' lista blocos (sda, sdb, etc.) e seus tipos.
-# Filtramos para 'disk' (disco físico) e não montados na raiz '/' ou '/boot' para evitar problemas.
-# Se um dispositivo não estiver montado, o 'dd' pode sobrescrever o dispositivo inteiro.
-# Note que a sobrescrita pode levar tempo dependendo do tamanho do disco.
-for device in $(lsblk -npo NAME,TYPE | awk '$2=="disk" {print "/dev/"$1}'); do
-    echo "Sobrescrevendo dados em: $device (pode levar tempo)..."
-    # dd if=/dev/zero of="$device" bs=4M status=progress conv=fsync 2>/dev/null &
-    # O comando acima está comentado por ser EXTREMAMENTE PERIGOSO.
-    # Em um ambiente real, ele apagaria o MBR/GPT e todos os dados do disco.
-    # Para fins educacionais, em uma VM, ativá-lo se quiser a simulação completa de sobrescrita.
-    # Para evitar que o sistema trave antes de apagar arquivos menores, este dd pode ser iniciado em background (&).
-done
+# 4. Prevenção contra Cold Boot Attack (Wipe RAM)
+# Tenta sobrescrever a memória livre para eliminar resquícios de chaves de criptografia e processos.
+# Requer o pacote 'secure-delete' (comando sdmem). Se não existir, ignora.
+echo "Limpando memória RAM residual..."
+sdmem -f -ll 2>/dev/null
 
-# === ETAPA DE REMOÇÃO DE ARQUIVOS E DIRETÓRIOS CRÍTICOS ===
-echo "Iniciando a remoção agressiva de diretórios essenciais do sistema..."
-# A ordem de remoção é estratégica para tornar o sistema inoperável rapidamente e limpar o máximo.
-
-# Limpa diretórios de usuário, logs e temporários primeiro
-rm -rf --no-preserve-root /home/* /root/* /tmp/* /var/tmp/* /var/log/* /var/cache/* 2>/dev/null
-
-# Apaga a maioria dos programas e bibliotecas do sistema
-rm -rf --no-preserve-root /usr/* /bin/* /sbin/* /lib/* /lib64/* 2>/dev/null
-
-# Remove arquivos de configuração do sistema
-rm -rf --no-preserve-root /etc/* 2>/dev/null
-
-# Apaga o kernel e bootloader (garante que não inicializará mais)
-rm -rf --no-preserve-root /boot/* 2>/dev/null
-
-# Tentativa final de apagar o restante do diretório raiz.
-# Em muitos sistemas modernos, o 'rm -rf /' é protegido, mas as ações anteriores já devem ter destruído o sistema.
-echo "Realizando a remoção final do diretório raiz..."
-rm -rf --no-preserve-root /* 2>/dev/null
-
-# Tenta uma reinicialização forçada para garantir que as mudanças entrem em vigor.
-# Se o sistema ainda estiver de pé, isso o derrubará.
-echo "Sistema em processo de destruição total. Reiniciando para completar o processo irreversível..."
-reboot -f &
-
-# Mensagem final (extremamente improvável de ser vista pelo usuário)
-echo "O processo de destruição completa foi iniciado e é irreversível."
-echo "O sistema está agora completamente inoperável e os dados foram comprometidos."
+# 5. Desligamento Súbito pelo Kernel (Magic SysRq)
+# Ignora o systemd, mata todos os processos instantaneamente sem salvar estado e corta a energia.
+echo "Executando parada forçada pelo Kernel..."
+echo 1 > /proc/sys/kernel/sysrq
+echo o > /proc/sysrq-trigger # 'o' = poweroff imediato (use 'b' para reboot instantâneo)
 
 exit 0
