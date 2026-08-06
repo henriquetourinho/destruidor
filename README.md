@@ -1,119 +1,204 @@
-# 💀🇧🇷 Destruidor
+# Destruidor 💀🇧🇷
 
-O **Destruidor** é um script Bash extremamente perigoso e irreversível, projetado para destruir completamente um sistema Linux e apagar dados em dispositivos conectados, sem intervenção ou confirmação. É destinado a usuários que necessitam de ação imediata para segurança e entendem exatamente as consequências de sua execução.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
----
-
-### ⚠️ AVISO CRÍTICO DE SEGURANÇA ⚠️
-
-* **ESTE SCRIPT É LETAL E IRREVERSÍVEL.**
-* **EXECUTÁ-LO CAUSA PERDA TOTAL DE DADOS E DANOS PERMANENTES AO SISTEMA.**
-* **APENAS USUÁRIOS QUE SABEM EXATAMENTE O QUE ESTÃO FAZENDO DEVEM EXECUTÁ-LO.**
-* **USE EM AMBIENTES CONTROLADOS, COMO MÁQUINAS VIRTUAIS, PARA MINIMIZAR RISCOS.**
+**Destruidor** é um script Bash de emergência para eliminação irreversível de dados sensíveis e inutilização completa do sistema. Projetado como ferramenta de **último recurso** para proteger pessoas antes de proteger máquinas — em risco de busca, apreensão ou invasão.
 
 ---
 
-### 📦 O que o Destruidor faz
+## 🎯 Casos de Uso Reais
 
-O Destruidor executa uma sequência de ações destrutivas automatizadas, projetadas para maximizar a eliminação de dados e tornar o sistema inoperante:
+### 📰 Jornalista em zona de conflito
+Um correspondente investigativo em região hostil mantém fontes confidenciais, documentos vazados e comunicações criptografadas. Se soldados ou milícias invadirem o local, cada segundo conta. **Duas teclas e o sistema inteiro vira lixo ilegível.**
 
-* **Preparação do Ambiente:**
-    * Identifica e remonta todas as partições detectadas em modo de escrita (`rw`) usando `mount` para garantir acesso total aos arquivos.
-    * Desmonta partições temporariamente (`umount`) para evitar bloqueios do sistema durante a destruição.
-* **Desativação de Proteções:**
-    * Remove atributos de imutabilidade (`chattr -i`) em arquivos críticos, como configurações do sistema ou logs, que poderiam impedir exclusão.
-    * Força permissões de escrita em todos os arquivos e diretórios usando `chmod -R`.
-* **Destruição Abrangente de Dados:**
-    * **Sobrescrita de Dispositivos**: Detecta dispositivos de bloco (HDs, SSDs, pendrives) via `/dev` (ex.: `/dev/sda`, `/dev/nvme0n1`) e tenta sobrescrever seus dados brutos com `/dev/zero` ou `/dev/urandom` usando `dd`. **Nota**: Este comando está comentado no script por segurança, mas pode ser ativado manualmente.
-    * **Remoção de Diretórios Críticos**: Apaga diretórios essenciais do sistema Linux em uma ordem estratégica para inutilizar o sistema rapidamente:
-        * `/tmp` e `/var/log`: Remove arquivos temporários e logs para eliminar rastros de atividades.
-        * `/home` e `/root`: Apaga dados de usuários, incluindo documentos, configurações e chaves.
-        * `/usr`, `/bin`, `/sbin`, `/lib`: Exclui programas e bibliotecas essenciais, tornando o sistema inoperante.
-        * `/etc`: Remove configurações do sistema, como redes, usuários e serviços.
-        * `/boot`: Apaga o kernel e o bootloader (ex.: GRUB), impedindo a inicialização.
-        * `/`: Tenta apagar o diretório raiz como ação final, eliminando qualquer resquício.
-    * Usa `rm -rf --no-preserve-root` para exclusão agressiva, ignorando proteções do sistema.
-    * **Sobrescrita de Espaço Livre**: Preenche o espaço livre em disco com dados aleatórios usando ferramentas como `shred` ou `dd` para dificultar recuperação de dados.
-    * **Desativação de Serviços**: Para processos ativos (ex.: `systemd`, `cron`) usando `systemctl` ou `killall` para evitar interferências durante a destruição.
-    * **Reinicialização Forçada**: Executa `reboot -f` ou `echo b > /proc/sysrq-trigger` para forçar a reinicialização imediata, consolidando a destruição, caso o sistema ainda esteja funcional.
+### ✊ Ativista sob regime repressivo
+Defensora de direitos humanos monitora abusos estatais e armazena provas digitais, listas de contatos seguros e rotas de fuga. Durante uma batida policial sem mandado, **a destruição instantânea protege toda a rede de apoio.**
+
+### 🔐 Fonte anônima com dados sensíveis
+Whistleblower possui evidências contra corporação criminosa. Se o dispositivo for apreendido, a criptografia do disco impede acesso — mas com tempo e recursos, adversários tentam quebrar senhas. **Sem o cabeçalho LUKS, nem com supercomputador quântico os dados voltam.**
+
+### 💻 Profissional de segurança em campo
+Analista carrega chaves de acesso a infraestruturas críticas. Em caso de sequestro relâmpago ou roubo do laptop, **acionar o Destruidor garante que credenciais não sejam extraídas.**
+
+### 🏠 Pessoa politicamente exposta em casa
+Candidatura, liderança comunitária ou cargo público atrai ameaças. Invasão domiciliar para confiscar dispositivos: **um botão físico escondido aciona o protocolo de silêncio digital permanente.**
 
 ---
 
-### 🚨 Por que ele precisa ser usado e motivos em situações de risco
+## 📦 Funcionamento Técnico Detalhado
 
-O Destruidor é uma ferramenta para usuários que precisam de ação imediata em situações críticas onde a segurança de dados é prioridade máxima. Ele é projetado para cenários onde informações sensíveis devem ser eliminadas rapidamente para evitar acesso não autorizado. Motivos para uso incluem:
+O Destruidor opera em **5 camadas sequenciais de destruição**, priorizando velocidade e eficácia:
 
-* **Jornalistas e Ativistas**: Em contextos de ameaça (ex.: regimes repressivos, buscas policiais), o script elimina evidências digitais, como documentos, contatos ou comunicações, protegendo fontes e investigações.
-* **Profissionais de Segurança**: Permite destruir dados em dispositivos comprometidos, como laptops ou servidores, antes que sejam confiscados ou invadidos.
-* **Emergências de Privacidade**: Em situações de risco iminente (ex.: invasão física ou vigilância), garante que dados sensíveis (chaves criptográficas, arquivos pessoais) sejam apagados permanentemente.
-* **Cenários de Alto Risco**: Ideal para quem opera em ambientes hostis (ex.: zonas de conflito, repressão política), onde a captura de um dispositivo pode comprometer pessoas ou operações.
+### Camada 1: 🔑 Crypto-Shredding de Cabeçalhos LUKS
 
-**Nota**: O uso requer planejamento prévio, como backups seguros de dados críticos em locais separados. Execute apenas quando a destruição total for a única opção para proteger informações.
+**Ataque mais eficiente do script.**
+
+Volumes criptografados com LUKS armazenam as chaves de descriptografia nos primeiros 2MB do disco (keyslots). O script:
+1. Varre todos os dispositivos com assinatura `crypto_LUKS` usando `blkid`
+2. Executa `cryptsetup luksErase` em cada volume detectado
+3. Como redundância, sobrescreve os primeiros 4096 setores com `/dev/urandom` via `dd`
+
+**Resultado:** Os dados continuam fisicamente no disco, mas são matematicamente irrecuperáveis. Destruir 2MB equivale a destruir 2TB. Tempo de execução: **milissegundos por volume**.
+
+### Camada 2: 🔥 Sobrescrita de Arquivos Críticos
+
+Antes que o sistema pare, elimina arquivos que revelam identidade:
+- `~/.ssh/id_*` — Chaves privadas SSH
+- `~/.gnupg/private-keys*` e `secring*` — Chaves GPG
+- `*.db` em `/var/lib` — Bancos SQLite de aplicações (navegadores, mensageiros, tokens de sessão)
+- `~/.bash_history` — Histórico de comandos
+
+Cada arquivo recebe **3 passadas de dados aleatórios + 1 passada de zeros + remoção** via `shred -n 3 -z -u -f`.
+
+### Camada 3: 💣 Corrupção de Tabelas de Partição
+
+Torna o sistema não inicializável:
+- Sobrescreve **primeiros 10MB** do disco: MBR, GPT primário, estágio 1 do GRUB
+- Sobrescreve **últimos 10MB** do disco: backup do GPT
+- Alcança tanto discos SATA (`/dev/sda`) quanto NVMe (`/dev/nvme0n1`)
+
+**Resultado:** BIOS/UEFI não encontra sistema operacional. Recuperar tabela de partição exige análise forense avançada — e os dados ainda estão criptografados sem cabeçalho.
+
+### Camada 4: 🧠 Limpeza de RAM (Anti-Cold Boot Attack)
+
+O ataque Cold Boot consiste em resfriar módulos de RAM, removê-los fisicamente e ler dados que persistiram por segundos ou minutos após o desligamento.
+
+O script contra-ataca:
+1. Executa `sync && echo 3 > /proc/sys/vm/drop_caches` para liberar caches
+2. Compacta memória com `echo 1 > /proc/sys/vm/compact_memory`
+3. Sobrescreve memória livre com `sdmem -f -ll` (dados aleatórios, 1 passada)
+4. Se `sdmem` não existir, faz fallback com `dd if=/dev/zero`
+
+**Resultado:** Chaves de criptografia que estavam em RAM são sobrescritas. Janela de ataque Cold Boot reduzida de minutos para segundos.
+
+### Camada 5: 📜 Desligamento Forçado via Kernel
+
+Ignora completamente o userspace:
+- Mata agentes de chaves (`gpg-agent`, `ssh-agent`, `gnome-keyring-daemon`)
+- Para serviços de logging (`rsyslog`, `auditd`, `systemd-journald`)
+- Desabilita histórico do bash (`unset HISTFILE`)
+- Executa Magic SysRq `o` (poweroff imediato pelo kernel)
+- Fallback com `poweroff -f -f` caso SysRq falhe
+
+**Resultado:** Desligamento em fração de segundo. Sem tempo para processos de contenção, scripts forenses ou malware interceptarem a destruição.
+
+### 🔒 Autoexclusão
+
+A última linha antes do desligamento executa `rm -f "$0"`. O próprio script desaparece do disco após cumprir sua função. Zero vestígios da ferramenta.
 
 ---
 
-### ⚙️ Requisitos para Execução
+## 🛡️ Arquitetura de Destruição: Por que funciona
 
-* Sistema Linux com terminal Bash.
-* Acesso `root` (superusuário), necessário para comandos de baixo nível (`dd`, `chattr`, `rm`).
-* Máquina virtual (ex: VirtualBox, VMware) ou dispositivo físico dedicado, dependendo da intenção do usuário.
-* Conhecimento técnico avançado para entender e gerenciar as consequências da execução.
+A eficácia do Destruidor vem da **pirâmide de destruição em camadas**:
 
----
+```
+        ┌─────────────────┐
+        │  Desligamento   │ ← Kernel, não userspace
+        │    Forçado      │
+       ─┼─────────────────┼─
+      │  Limpeza de RAM   │ ← Anti-forense física
+     ──┼─────────────────┼──
+    │  Corrupção de GPT   │ ← Sistema não inicializa
+   ───┼─────────────────┼───
+  │  Shred de Chaves     │ ← Identidades apagadas
+ ────┼─────────────────┼────
+│  Crypto-Shred LUKS     │ ← Dados matematicamente mortos
+ ─────────────────────────
+```
 
-### 📍 Onde Executar e Melhor Local para o Script
-
-Pode ser executado em qualquer lugar por quem sabe o que está fazendo. Para garantir que o script funcione de forma completa sem ser excluído prematuramente, é recomendável que ele esteja em um local que não seja dos primeiros a ser alvo de exclusão ou que seja um diretório temporário, mas que não seja limpado no início.
-
-**Melhor Local Recomendado:**
-
-* **`/tmp`**: Embora seja um diretório temporário, arquivos lá geralmente não são removidos imediatamente ao início da execução de scripts destrutivos que visam o sistema de arquivos principal. Colocar o script diretamente em `/tmp` (ex: `/tmp/destruidor.sh`) e executá-lo de lá é uma boa prática.
-* **Diretório de montagem de um ramdisk (temporário na RAM)**: Para o cenário mais crítico, você poderia criar um ramdisk, copiar o script para ele e executar. Isso garante que o script esteja na RAM e não em um disco que será apagado, mas é uma configuração mais avançada.
-
-**Onde Executar:**
-
-* Máquinas virtuais isoladas (ex: VirtualBox, VMware) com sistemas Linux (Ubuntu, Debian, AlmaLinux) para testes controlados.
-* Dispositivos físicos que necessitem de ação para segurança, como laptops ou servidores em cenários de risco.
-* Configure snapshots em VMs ou backups externos, se necessário, para restaurar sistemas após testes.
+**Princípio fundamental:** Melhor destruir cabeçalhos de criptografia em 2 milissegundos do que tentar sobrescrever discos inteiros por horas. SSDs modernos com wear leveling tornam sobrescrita completa inútil — mas sem a chave, os dados são lixo.
 
 ---
 
-### 🛠️ Como Utilizar
+## ⚠️ AVISO CRÍTICO DE SEGURANÇA
 
-1.  **Prepare o Ambiente:**
-    * Transfira o arquivo `destruidor.sh` para o dispositivo ou máquina virtual. **Recomendação:** Salve-o em `/tmp/destruidor.sh` ou outro local similar.
-    * Verifique se o sistema está isolado (sem conexão com redes externas, se possível).
-2.  **Dê Permissão de Execução:**
-    ```bash
-    chmod +x /tmp/destruidor.sh # Ou o caminho onde você salvou
-    ```
-3.  **Execute como Root:**
-    ```bash
-    sudo /tmp/destruidor.sh # Ou o caminho onde você salvou
-    ```
-4.  **Aviso Inicial**: O script exibe um aviso de 5 segundos, permitindo cancelamento com `Ctrl+C`. Após isso, a destruição começa sem pausas.
-5.  **Monitoramento (Opcional)**:
-    * Use `tail -f /var/log/syslog` ou `dmesg` em outra sessão (se possível) para acompanhar ações em tempo real.
-    * A execução pode levar de segundos a minutos, dependendo do tamanho dos discos e do hardware.
-6.  **Pós-Execução**:
-    * O sistema ficará inoperante, sem possibilidade de inicialização.
-    * Descarte o dispositivo ou restaure o snapshot da VM, se aplicável.
+Este script é **IRREVERSÍVEL** e causa **PERDA PERMANENTE DE DADOS**.
 
-**Dica**: Teste primeiro em uma VM para entender o comportamento antes de usar em cenários reais.
+- ❌ **Não há desfazer.** Dados não poderão ser recuperados por ninguém, incluindo você.
+- ⚡ **Uso exclusivo em emergências.** Projetado para situações onde destruição total é preferível à captura.
+- 🧪 **Teste antes em VM.** Snapshots permitem entender o comportamento sem riscos.
+- 👤 **Conhecimento técnico requerido.** Entenda LUKS, tabelas de partição e sistemas Linux.
+- 🧠 **Backups estratégicos.** Mantenha cópias offline em local seguro, preparadas para reconstrução pós-evento.
+- 💀 **SSDs com controladores proprietários podem reter dados.** Para ameaças estatais, considere destruição física complementar.
+
+**Use este script apenas quando integridade física ou liberdade dependerem da eliminação dos dados.**
 
 ---
 
-### ♻️ Como se Autoexcluir (Garantindo que o Processo Termine Primeiro)
+## ⚙️ Requisitos
 
-Para evitar rastros, o script pode se autoexcluir **APÓS** a tentativa de conclusão das ações de destruição. O comando de autoexclusão deve ser uma das últimas linhas do script, **antes da reinicialização forçada (se o sistema ainda permitir)**, garantindo que ele não se remova antes de completar suas tarefas destrutivas.
+- Sistema Linux (Debian, Ubuntu, Arch, Fedora e derivados)
+- Acesso root/sudo
+- Dependências:
+  - `cryptsetup` — crypto-shredding LUKS
+  - `secure-delete` — sdmem para RAM
+  - `coreutils` — shred, dd
 
-Adicione esta linha ao **final do seu script `destruidor.sh`**, pouco antes do `reboot -f &` (se presente) ou da última mensagem de saída:
+---
 
-bash
-rm -f "$0" # Remove o próprio script após a execução das ações destrutivas.
+## 🚀 Como Usar
+
+**1. Clone o repositório:**
+```bash
+git clone https://github.com/henriquetourinho/destruidor.git
+cd destruidor
+```
+
+**2. Dê permissão de execução:**
+```bash
+chmod +x destruidor.sh
+```
+
+**3. Execute em emergência:**
+```bash
+sudo ./destruidor.sh
+```
+
+Sem confirmação, sem espera. O sistema desliga em segundos e nunca mais inicializa.
+
+---
+
+## 📍 Local Estratégico
+
+- **`/tmp/destruidor.sh`** — Diretório temporário, não é alvo no início da destruição
+- **Ramdisk (tmpfs)** — Carregue em RAM para zero vestígios em disco
+- **Pendrive dedicado** — Removível fisicamente após acionamento
+
+---
+
+## 🔍 Gatilhos de Emergência
+
+**Atalho de teclado (GNOME, i3, dwm):**
+```bash
+gnome-terminal -- sudo /tmp/destruidor.sh
+```
+
+**USBKill (remoção de dispositivo):**
+```bash
+sudo usbkill --sh-command "sudo /tmp/destruidor.sh"
+```
+
+**Botão físico GPIO (Raspberry Pi/servidores):**
+```bash
+echo "17" > /sys/class/gpio/export
+# Script monitora pino e aciona destruidor
+```
 
 ---
 
 ## 📜 Licença
 
-Este projeto está licenciado sob a **MIT License**. Veja o arquivo `LICENSE` no repositório para mais detalhes.
+MIT License. Veja o arquivo [LICENSE](LICENSE).
+
+---
+
+## 🌐 Contato
+
+- **Autor:** Carlos Henrique Tourinho Santana
+- **Website:** [henriquetourinho.com.br](https://henriquetourinho.com.br)
+- **Instagram:** [@henrique_ntxa](https://instagram.com/henrique_ntxa)
+- **Threads:** [@henrique_ntxa](https://threads.net/@henrique_ntxa)
+- **GitHub:** [github.com/henriquetourinho](https://github.com/henriquetourinho)
+- **Debian Wiki:** [wiki.debian.org/henriquetourinho](https://wiki.debian.org/henriquetourinho)
+
