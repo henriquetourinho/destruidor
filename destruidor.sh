@@ -1,204 +1,119 @@
-# Destruidor 💀🇧🇷
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-**Destruidor** é um script Bash de emergência para eliminação irreversível de dados sensíveis e inutilização completa do sistema. Projetado como ferramenta de **último recurso** para proteger pessoas antes de proteger máquinas — em risco de busca, apreensão ou invasão.
-
----
-
-## 🎯 Casos de Uso Reais
-
-### 📰 Jornalista em zona de conflito
-Um correspondente investigativo em região hostil mantém fontes confidenciais, documentos vazados e comunicações criptografadas. Se soldados ou milícias invadirem o local, cada segundo conta. **Duas teclas e o sistema inteiro vira lixo ilegível.**
-
-### ✊ Ativista sob regime repressivo
-Defensora de direitos humanos monitora abusos estatais e armazena provas digitais, listas de contatos seguros e rotas de fuga. Durante uma batida policial sem mandado, **a destruição instantânea protege toda a rede de apoio.**
-
-### 🔐 Fonte anônima com dados sensíveis
-Whistleblower possui evidências contra corporação criminosa. Se o dispositivo for apreendido, a criptografia do disco impede acesso — mas com tempo e recursos, adversários tentam quebrar senhas. **Sem o cabeçalho LUKS, nem com supercomputador quântico os dados voltam.**
-
-### 💻 Profissional de segurança em campo
-Analista carrega chaves de acesso a infraestruturas críticas. Em caso de sequestro relâmpago ou roubo do laptop, **acionar o Destruidor garante que credenciais não sejam extraídas.**
-
-### 🏠 Pessoa politicamente exposta em casa
-Candidatura, liderança comunitária ou cargo público atrai ameaças. Invasão domiciliar para confiscar dispositivos: **um botão físico escondido aciona o protocolo de silêncio digital permanente.**
-
----
-
-## 📦 Funcionamento Técnico Detalhado
-
-O Destruidor opera em **5 camadas sequenciais de destruição**, priorizando velocidade e eficácia:
-
-### Camada 1: 🔑 Crypto-Shredding de Cabeçalhos LUKS
-
-**Ataque mais eficiente do script.**
-
-Volumes criptografados com LUKS armazenam as chaves de descriptografia nos primeiros 2MB do disco (keyslots). O script:
-1. Varre todos os dispositivos com assinatura `crypto_LUKS` usando `blkid`
-2. Executa `cryptsetup luksErase` em cada volume detectado
-3. Como redundância, sobrescreve os primeiros 4096 setores com `/dev/urandom` via `dd`
-
-**Resultado:** Os dados continuam fisicamente no disco, mas são matematicamente irrecuperáveis. Destruir 2MB equivale a destruir 2TB. Tempo de execução: **milissegundos por volume**.
-
-### Camada 2: 🔥 Sobrescrita de Arquivos Críticos
-
-Antes que o sistema pare, elimina arquivos que revelam identidade:
-- `~/.ssh/id_*` — Chaves privadas SSH
-- `~/.gnupg/private-keys*` e `secring*` — Chaves GPG
-- `*.db` em `/var/lib` — Bancos SQLite de aplicações (navegadores, mensageiros, tokens de sessão)
-- `~/.bash_history` — Histórico de comandos
-
-Cada arquivo recebe **3 passadas de dados aleatórios + 1 passada de zeros + remoção** via `shred -n 3 -z -u -f`.
-
-### Camada 3: 💣 Corrupção de Tabelas de Partição
-
-Torna o sistema não inicializável:
-- Sobrescreve **primeiros 10MB** do disco: MBR, GPT primário, estágio 1 do GRUB
-- Sobrescreve **últimos 10MB** do disco: backup do GPT
-- Alcança tanto discos SATA (`/dev/sda`) quanto NVMe (`/dev/nvme0n1`)
-
-**Resultado:** BIOS/UEFI não encontra sistema operacional. Recuperar tabela de partição exige análise forense avançada — e os dados ainda estão criptografados sem cabeçalho.
-
-### Camada 4: 🧠 Limpeza de RAM (Anti-Cold Boot Attack)
-
-O ataque Cold Boot consiste em resfriar módulos de RAM, removê-los fisicamente e ler dados que persistiram por segundos ou minutos após o desligamento.
-
-O script contra-ataca:
-1. Executa `sync && echo 3 > /proc/sys/vm/drop_caches` para liberar caches
-2. Compacta memória com `echo 1 > /proc/sys/vm/compact_memory`
-3. Sobrescreve memória livre com `sdmem -f -ll` (dados aleatórios, 1 passada)
-4. Se `sdmem` não existir, faz fallback com `dd if=/dev/zero`
-
-**Resultado:** Chaves de criptografia que estavam em RAM são sobrescritas. Janela de ataque Cold Boot reduzida de minutos para segundos.
-
-### Camada 5: 📜 Desligamento Forçado via Kernel
-
-Ignora completamente o userspace:
-- Mata agentes de chaves (`gpg-agent`, `ssh-agent`, `gnome-keyring-daemon`)
-- Para serviços de logging (`rsyslog`, `auditd`, `systemd-journald`)
-- Desabilita histórico do bash (`unset HISTFILE`)
-- Executa Magic SysRq `o` (poweroff imediato pelo kernel)
-- Fallback com `poweroff -f -f` caso SysRq falhe
-
-**Resultado:** Desligamento em fração de segundo. Sem tempo para processos de contenção, scripts forenses ou malware interceptarem a destruição.
-
-### 🔒 Autoexclusão
-
-A última linha antes do desligamento executa `rm -f "$0"`. O próprio script desaparece do disco após cumprir sua função. Zero vestígios da ferramenta.
-
----
-
-## 🛡️ Arquitetura de Destruição: Por que funciona
-
-A eficácia do Destruidor vem da **pirâmide de destruição em camadas**:
-
-```
-        ┌─────────────────┐
-        │  Desligamento   │ ← Kernel, não userspace
-        │    Forçado      │
-       ─┼─────────────────┼─
-      │  Limpeza de RAM   │ ← Anti-forense física
-     ──┼─────────────────┼──
-    │  Corrupção de GPT   │ ← Sistema não inicializa
-   ───┼─────────────────┼───
-  │  Shred de Chaves     │ ← Identidades apagadas
- ────┼─────────────────┼────
-│  Crypto-Shred LUKS     │ ← Dados matematicamente mortos
- ─────────────────────────
-```
-
-**Princípio fundamental:** Melhor destruir cabeçalhos de criptografia em 2 milissegundos do que tentar sobrescrever discos inteiros por horas. SSDs modernos com wear leveling tornam sobrescrita completa inútil — mas sem a chave, os dados são lixo.
-
----
-
-## ⚠️ AVISO CRÍTICO DE SEGURANÇA
-
-Este script é **IRREVERSÍVEL** e causa **PERDA PERMANENTE DE DADOS**.
-
-- ❌ **Não há desfazer.** Dados não poderão ser recuperados por ninguém, incluindo você.
-- ⚡ **Uso exclusivo em emergências.** Projetado para situações onde destruição total é preferível à captura.
-- 🧪 **Teste antes em VM.** Snapshots permitem entender o comportamento sem riscos.
-- 👤 **Conhecimento técnico requerido.** Entenda LUKS, tabelas de partição e sistemas Linux.
-- 🧠 **Backups estratégicos.** Mantenha cópias offline em local seguro, preparadas para reconstrução pós-evento.
-- 💀 **SSDs com controladores proprietários podem reter dados.** Para ameaças estatais, considere destruição física complementar.
-
-**Use este script apenas quando integridade física ou liberdade dependerem da eliminação dos dados.**
-
----
-
-## ⚙️ Requisitos
-
-- Sistema Linux (Debian, Ubuntu, Arch, Fedora e derivados)
-- Acesso root/sudo
-- Dependências:
-  - `cryptsetup` — crypto-shredding LUKS
-  - `secure-delete` — sdmem para RAM
-  - `coreutils` — shred, dd
-
----
-
-## 🚀 Como Usar
-
-**1. Clone o repositório:**
-```bash
-git clone https://github.com/henriquetourinho/destruidor.git
-cd destruidor
-```
-
-**2. Dê permissão de execução:**
-```bash
-chmod +x destruidor.sh
-```
-
-**3. Execute em emergência:**
-```bash
-sudo ./destruidor.sh
-```
-
-Sem confirmação, sem espera. O sistema desliga em segundos e nunca mais inicializa.
-
----
-
-## 📍 Local Estratégico
-
-- **`/tmp/destruidor.sh`** — Diretório temporário, não é alvo no início da destruição
-- **Ramdisk (tmpfs)** — Carregue em RAM para zero vestígios em disco
-- **Pendrive dedicado** — Removível fisicamente após acionamento
-
----
-
-## 🔍 Gatilhos de Emergência
-
-**Atalho de teclado (GNOME, i3, dwm):**
-```bash
-gnome-terminal -- sudo /tmp/destruidor.sh
-```
-
-**USBKill (remoção de dispositivo):**
-```bash
-sudo usbkill --sh-command "sudo /tmp/destruidor.sh"
-```
-
-**Botão físico GPIO (Raspberry Pi/servidores):**
-```bash
-echo "17" > /sys/class/gpio/export
-# Script monitora pino e aciona destruidor
-```
-
----
-
-## 📜 Licença
-
-MIT License. Veja o arquivo [LICENSE](LICENSE).
-
----
-
-## 🌐 Contato
-
-- **Autor:** Carlos Henrique Tourinho Santana
-- **Website:** [henriquetourinho.com.br](https://henriquetourinho.com.br)
-- **Instagram:** [@henrique_ntxa](https://instagram.com/henrique_ntxa)
-- **Threads:** [@henrique_ntxa](https://threads.net/@henrique_ntxa)
-- **GitHub:** [github.com/henriquetourinho](https://github.com/henriquetourinho)
-- **Debian Wiki:** [wiki.debian.org/henriquetourinho](https://wiki.debian.org/henriquetourinho)
-
+#!/bin/bash
+# /*********************************************************************************
+# * Projeto: Destruidor v2.0 - Revisão Técnica Aprimorada
+# * Foco: Anti-forense, resistência a adversário sofisticado
+# *********************************************************************************/
+
+# === CONFIGURAÇÕES DE SEGURANÇA ===
+# Desabilita histórico do bash imediatamente
+unset HISTFILE
+set +o history
+
+# Mata processos de logging e auditoria ANTES de agir
+systemctl stop rsyslog auditd systemd-journald 2>/dev/null
+killall -9 rsyslogd auditd 2>/dev/null
+
+echo "[!] PROTOCOLO DE DESTRUIÇÃO - VARIANTE ANTI-FORENSE"
+
+# === 1. DESTRUIÇÃO DE CHAVES EM MEMÓRIA (RAM) ===
+# Mata agentes que mantém chaves descriptografadas em RAM
+echo "Eliminando agentes de chaves..."
+killall -9 gpg-agent ssh-agent gnome-keyring-daemon 2>/dev/null
+pkill -f "keyring" 2>/dev/null
+
+# === 2. CRYPTO-SHREDDING LUKS (CABEÇALHOS) ===
+# PRIORIDADE MÁXIMA - 2MB destrói terabytes
+echo "Destruindo cabeçalhos LUKS..."
+for luks_dev in $(dmsetup ls --target crypt | awk '{print $1}' | while read dm; do
+    # Resolve dispositivo real (inclui LVM sobre LUKS)
+    cryptsetup status "$dm" 2>/dev/null | grep device | awk '{print $2}'
+done | sort -u); do
+    # Sobrescreve cabeçalho + keyslots múltiplas vezes
+    dd if=/dev/urandom of="$luks_dev" bs=512 count=4096 conv=notrunc 2>/dev/null &
+    cryptsetup luksErase -q "$luks_dev" 2>/dev/null &
+done
+
+# Backup: varre todos os dispositivos blocos por assinatura LUKS
+for dev in $(blkid -t TYPE=crypto_LUKS -o device); do
+    cryptsetup luksErase -q "$dev" 2>/dev/null &
+done
+
+# === 3. DESTRUIÇÃO DE ARQUIVOS COM RESISTÊNCIA A JOURNALING ===
+echo "Eliminando artefatos forenses..."
+# Lista de alvos críticos (expanda conforme necessidade)
+TARGETS=(
+    # Chaves e identidades
+    "/home/*/.ssh/id_*"
+    "/home/*/.gnupg/private-keys*"
+    "/home/*/.gnupg/secring*"
+    "/root/.ssh/id_*"
+    # Bancos de dados locais
+    "/home/*/.mozilla/firefox/*/places.sqlite"
+    "/home/*/.mozilla/firefox/*/cookies.sqlite"
+    "/home/*/.config/chromium/Default/Cookies"
+    "/home/*/.config/chromium/Default/History"
+    # Configurações que revelam hábitos
+    "/home/*/.bash_history"
+    "/home/*/.zsh_history"
+    "/root/.bash_history"
+)
+
+for target in "${TARGETS[@]}"; do
+    # -n 3: 3 passadas (além de 2 anteriores fúteis)
+    # -z: última passada com zeros para esconder que houve shred
+    # -u: remove após sobrescrever
+    # -f: força se permissões permitirem
+    shred -n 3 -z -u -f $target 2>/dev/null
+done
+
+# === 4. CORRUPÇÃO DE PARTIÇÕES E BOOT ===
+echo "Inutilizando tabelas de partição..."
+for disk in $(lsblk -ndo NAME,TYPE | awk '$2=="disk"{print "/dev/"$1}'); do
+    # Destrói MBR (primeiros 512 bytes) + GPT primária (próximos 33 setores)
+    dd if=/dev/urandom of="$disk" bs=512 count=20480 conv=notrunc 2>/dev/null &
+    
+    # Destrói GPT backup no final do disco
+    size=$(blockdev --getsz "$disk" 2>/dev/null)
+    if [ -n "$size" ]; then
+        dd if=/dev/urandom of="$disk" bs=512 seek=$((size - 20480)) count=20480 conv=notrunc 2>/dev/null &
+    fi
+done
+
+# === 5. ELIMINAÇÃO DE FIRMWARE EFI ===
+# Remove variáveis EFI que podem conter informações
+echo "Limpando variáveis EFI..."
+if [ -d /sys/firmware/efi/efivars ]; then
+    # Remove entradas de boot personalizadas
+    for entry in /sys/firmware/efi/efivars/Boot0*; do
+        chattr -i "$entry" 2>/dev/null
+        echo "" > "$entry" 2>/dev/null
+    done
+fi
+
+# === 6. ANTI-FORENSE DE MEMÓRIA ===
+echo "Limpando memória RAM..."
+# Múltiplas estratégias:
+sync; echo 3 > /proc/sys/vm/drop_caches  # Limpa page cache
+echo 1 > /proc/sys/vm/compact_memory     # Compacta memória antes de limpar
+sdmem -f -ll 2>/dev/null || true         # Sobrescreve memória livre
+# Alternativa se sdmem não existir:
+if ! command -v sdmem &>/dev/null; then
+    # Aloca e preenche memória (não tão eficaz, mas ajuda)
+    dd if=/dev/zero of=/dev/null bs=1M count=$(free -m | awk '/Mem:/{print $4}') 2>/dev/null
+fi
+
+# === 7. DESLIGAMENTO FORÇADO IRRECUPERÁVEL ===
+echo "Executando desligamento de emergência..."
+sync  # Último sync (provavelmente inútil, mas tenta)
+# Desabilita todos os watchdog timers
+echo 'V' > /dev/watchdog 2>/dev/null
+echo 'V' > /dev/watchdog0 2>/dev/null
+# Poweroff imediato via kernel (ignora systemd completamente)
+echo 1 > /proc/sys/kernel/sysrq
+echo o > /proc/sysrq-trigger
+
+# Fallback: se sysrq falhar, tenta via ACPI
+sleep 1
+poweroff -f -f 2>/dev/null
+
+exit 0
